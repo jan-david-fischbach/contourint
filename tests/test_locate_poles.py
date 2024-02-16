@@ -32,6 +32,8 @@ def test_poles_residues():
   example_poles = np.array([1+1j, 1+1.1j, 1.1+1j])
   example_residues = np.array([1, 1e-3, 1e-4])
   poles, residues = locate_poles(contour, f_mero)
+  print(f"{poles=}")
+  print(f"{residues=}")
   assert np.allclose(poles, example_poles)
   assert np.allclose(residues, example_residues)
 

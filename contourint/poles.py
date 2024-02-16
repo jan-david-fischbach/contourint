@@ -16,7 +16,15 @@ def locate_poles(contour: Contour, f: callable, M: int=10, cutoff=1e-9):
           maximum number of poles
   """
 
-  s_k = hankel_entries(contour, f, M)
+  scale = 1/np.sqrt(contour.radius.real*contour.radius.imag)
+  shift = -contour.center
+
+  def normalized_f(omega):
+    return f((omega*(1/scale))+-1*shift)
+
+  normalized_contour = (contour+shift)*scale
+  s_k = hankel_entries(normalized_contour, normalized_f, M)
+
   H  = hankel_matrix(s_k[ :M  ], s_k[M-1:-1])
   H2 = hankel_matrix(s_k[1:M+1], s_k[M:])
 
@@ -25,7 +33,7 @@ def locate_poles(contour: Contour, f: callable, M: int=10, cutoff=1e-9):
   V = vandermonde_matrix(poles)
   residues = np.diagonal(R.T@H@R) / np.sum(V.T*R.T, 1)**2
 
-  selection = residues/np.max(residues) > cutoff
+  selection = np.abs(residues)/np.max(np.abs(residues)) > cutoff
 
   poles = poles[selection]
   residues = residues[selection]
@@ -33,7 +41,7 @@ def locate_poles(contour: Contour, f: callable, M: int=10, cutoff=1e-9):
   sorting = np.argsort(-np.abs(residues))
   #TODO quadratic quantities, Real valued hankel matrices, derivatives
 
-  return poles[sorting], residues[sorting]
+  return (poles[sorting]/scale)-shift, residues[sorting]/scale
 
 
 def hankel_entries(contour: Contour, f: callable, M: int):

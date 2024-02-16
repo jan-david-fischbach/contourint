@@ -1,3 +1,4 @@
+from __future__ import annotations
 import chex
 import jax.config
 jax.config.update("jax_enable_x64", True)
@@ -69,3 +70,41 @@ class Ellipse(Contour):
 
   def integrate(self, f: callable) -> complex:
     return np.sum(self.weights*f(self.points))
+
+  def __add__(self, shift: complex) -> Ellipse:
+      center = self.center + shift
+      return Ellipse(center=center, radius=self.radius, num_points=self.num_points)
+
+  def __mul__(self, scale: float) -> Ellipse:
+      return Ellipse(center=self.center, radius=self.radius*scale, num_points=self.num_points)
+
+
+@chex.dataclass
+class Stack(Contour):
+  """Stack of contours. Last one should be the outermost one"""
+  contours: list[Contour]
+
+  @property
+  def radius(self) -> complex:
+    radii = np.array([contour.radius for contour in self.contours])
+    return np.mean(radii.real) + 1j*np.mean(radii.imag) # np.sqrt(np.mean(radii**2))
+
+  @property
+  def center(self) -> complex:
+    return self.contours[-1].center
+
+  @property
+  def points(self) -> chex.ArrayDevice:
+    points = np.concatenate([inner.points for inner in self.contours])
+    return points
+
+  def integrate(self, f: callable) -> complex:
+    return np.sum(np.array([inner.integrate(f) for inner in self.contours]))
+
+  def __add__(self, shift: complex) -> Stack:
+      contours = [inner + shift for inner in self.contours]
+      return Stack(contours = contours)
+
+  def __mul__(self, scale: float) -> Stack:
+      contours = [inner * scale for inner in self.contours]
+      return Stack(contours = contours)
