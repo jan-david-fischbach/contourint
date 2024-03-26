@@ -3,7 +3,7 @@ import jax.numpy as np
 import scipy.linalg
 import chex
 
-def locate_poles(contour: Contour, f: callable, M: int=10, cutoff=1e-9):
+def locate_poles(contour: Contour, f: callable, M: int=10, cutoff=1e-9, k_factor: float = 1):
   """finds the poles of f within the given contour
   largely based on https://arxiv.org/abs/2307.04654 ([1]), which is based on
   algorithm [Cp] from  https://doi.org/10.1137/130931035 ([2])
@@ -23,19 +23,20 @@ def locate_poles(contour: Contour, f: callable, M: int=10, cutoff=1e-9):
     return f((omega*(1/scale))+-1*shift)
 
   normalized_contour = (contour+shift)*scale
-  s_k = hankel_entries(normalized_contour, normalized_f, M)
-
+  s_k = hankel_entries(normalized_contour, normalized_f, M, k_factor=k_factor, offset=0)
   H  = hankel_matrix(s_k[ :M  ], s_k[M-1:-1])
-  H2 = hankel_matrix(s_k[1:M+1], s_k[M:])
+
+  s_k_2 = hankel_entries(normalized_contour, normalized_f, M, k_factor=k_factor, offset=1)
+  H2 = hankel_matrix(s_k_2[ :M  ], s_k_2[M-1:-1])
 
   poles, R = scipy.linalg.eig(H2, H)
 
-  V = vandermonde_matrix(poles)
+  V = vandermonde_matrix(poles, k_factor=k_factor)
   residues = np.diagonal(R.T@H@R) / np.sum(V.T*R.T, 1)**2
 
   selection = np.abs(residues)/np.max(np.abs(residues)) > cutoff
 
-  poles = poles[selection]
+  poles = poles[selection] #** (1/k_factor)
   residues = residues[selection]
 
   sorting = np.argsort(-np.abs(residues))
@@ -44,7 +45,7 @@ def locate_poles(contour: Contour, f: callable, M: int=10, cutoff=1e-9):
   return (poles[sorting]/scale)-shift, residues[sorting]/scale
 
 
-def hankel_entries(contour: Contour, f: callable, M: int):
+def hankel_entries(contour: Contour, f: callable, M: int, k_factor: float, offset: float):
   """elements of the hankel matrices according to eq. (2) of [1]
   Args:
       contour (Contour):
@@ -56,11 +57,13 @@ def hankel_entries(contour: Contour, f: callable, M: int):
   """
   def integrand(k):
     def _inner(omega):
-      return omega**k * f(omega)
+      result = omega**(k) * f(omega)
+      #print(result)
+      return result
     return _inner
 
   return 1/(2j * np.pi) * np.array([
-    contour.integrate(integrand(k)) for k in range(2*M)
+    contour.integrate(integrand(k*k_factor + offset)) for k in range(2*M)
   ])
 
 def hankel_matrix(c: chex.ArrayDevice, r: chex.ArrayDevice):
@@ -79,11 +82,11 @@ def hankel_matrix(c: chex.ArrayDevice, r: chex.ArrayDevice):
   return np.array(hankel)
 
 
-def vandermonde_matrix(w: chex.ArrayDevice):
+def vandermonde_matrix(w: chex.ArrayDevice, k_factor: float):
   """constructs the vandermonde matrix according to eq. (3.7) of [2]
 
   Args:
       w (chex.ArrayDevice): the eigenvalues
   """
   M = len(w)
-  return np.array([np.power(np.where(np.isinf(w), 0, w), k) for k in range(M)])
+  return np.array([np.power(np.where(np.isinf(w), 0, w), k*k_factor) for k in range(M)])
