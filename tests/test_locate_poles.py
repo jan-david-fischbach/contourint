@@ -1,5 +1,5 @@
 from contourint import hankel_matrix, vandermonde_matrix, locate_poles
-from contourint.contour import Ellipse
+from contourint.contour import Ellipse, Stack
 import jax.numpy as np
 import chex
 
@@ -36,6 +36,22 @@ def test_poles_residues():
   print(f"{residues=}")
   assert np.allclose(poles, example_poles)
   assert np.allclose(residues, example_residues)
+
+def test_poles_residues():
+  example_poles = np.array([1+1j, 1+1.1j, 1.1+1j])
+  example_residues = np.array([1, 1e-3, 1e-4])
+  def f_mero(z: chex.ArrayDevice):
+    """example of a meromorphic function with a single pole"""
+    return np.exp(1/z) + np.sum(example_residues.reshape(1, -1)/(z.reshape(-1, 1)-example_poles.reshape(1, -1)), axis=1)
+
+  contour = Stack(contours=[
+    Ellipse(center = 0, radius = 2+2j, num_points = 128),
+    Ellipse(center = 0, radius = 0.05-0.05j, num_points = 512)
+  ])
+
+  poles, residues = locate_poles(contour, f_mero)
+  pass
+
 
 if __name__ == "__main__":
   test_hankel()

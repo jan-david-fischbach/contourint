@@ -99,7 +99,9 @@ class Stack(Contour):
     return points
 
   def integrate(self, f: callable) -> complex:
-    return np.sum(np.array([inner.integrate(f) for inner in self.contours]))
+    inner_integrals = np.array([inner.integrate(f) for inner in self.contours])
+    #print(inner_integrals)
+    return np.sum(inner_integrals)
 
   def __add__(self, shift: complex) -> Stack:
       contours = [inner + shift for inner in self.contours]
