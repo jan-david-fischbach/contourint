@@ -68,16 +68,21 @@ class Ellipse(Contour):
     weights = self.d_points * 2*np.pi/self.num_points
     return weights
 
-  def integrate(self, f: callable) -> complex:
+  def integrate(self, f: callable, **kwargs) -> complex:
     return np.sum(self.weights*f(self.points))
 
   def __add__(self, shift: complex) -> Ellipse:
-      center = self.center + shift
-      return Ellipse(center=center, radius=self.radius, num_points=self.num_points)
+    center = self.center + shift
+    return Ellipse(center=center, radius=self.radius, num_points=self.num_points)
+
+  def __sub__(self, shift:complex) -> Ellipse:
+    return self + -1*shift
 
   def __mul__(self, scale: float) -> Ellipse:
-      return Ellipse(center=self.center, radius=self.radius*scale, num_points=self.num_points)
+    return Ellipse(center=self.center, radius=self.radius*scale, num_points=self.num_points)
 
+  def __div__(self, scale: float) -> Ellipse:
+    return self * (1/scale)
 
 @chex.dataclass
 class Stack(Contour):
@@ -87,7 +92,7 @@ class Stack(Contour):
   @property
   def radius(self) -> complex:
     radii = np.array([contour.radius for contour in self.contours])
-    return np.mean(radii.real) + 1j*np.mean(radii.imag) # np.sqrt(np.mean(radii**2))
+    return np.mean(radii.real) + 1j*np.mean(np.abs(radii.imag)) # np.sqrt(np.mean(radii**2))
 
   @property
   def center(self) -> complex:
@@ -98,15 +103,37 @@ class Stack(Contour):
     points = np.concatenate([inner.points for inner in self.contours])
     return points
 
-  def integrate(self, f: callable) -> complex:
-    inner_integrals = np.array([inner.integrate(f) for inner in self.contours])
-    #print(inner_integrals)
-    return np.sum(inner_integrals)
+  def integrate(self, f: callable, regularize: bool=False) -> complex:
+    inner_integrals = []
+    for partial_contour in self.contours:
+      #print(f"{partial_contour.radius=}")
+      if regularize:
+        r = partial_contour.radius
+        scale = 1/np.sqrt(r.real)/np.sqrt(np.abs(r.imag))
+        shift = -partial_contour.center
+      else:
+        scale = 1
+        shift = 0
+
+      def reg_f(omega):
+        return f((omega/scale)-shift)
+
+      reg_partial_contour = (partial_contour+shift)*scale
+
+      inner_integrals.append(reg_partial_contour.integrate(reg_f)/scale - shift)
+    #print(f"{inner_integrals=}")
+    return np.sum(np.array(inner_integrals))
 
   def __add__(self, shift: complex) -> Stack:
-      contours = [inner + shift for inner in self.contours]
-      return Stack(contours = contours)
+    contours = [inner + shift for inner in self.contours]
+    return Stack(contours = contours)
+
+  def __sub__(self, shift:complex) -> Stack:
+    return self + -1*shift
 
   def __mul__(self, scale: float) -> Stack:
-      contours = [inner * scale for inner in self.contours]
-      return Stack(contours = contours)
+    contours = [inner * scale for inner in self.contours]
+    return Stack(contours = contours)
+
+  def __div__(self, scale: float) -> Stack:
+    return self * (1/scale)

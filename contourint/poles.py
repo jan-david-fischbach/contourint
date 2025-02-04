@@ -3,7 +3,7 @@ import jax.numpy as np
 import scipy.linalg
 import chex
 
-def locate_poles(contour: Contour, f: callable, M: int=10, cutoff=1e-9):
+def locate_poles(contour: Contour, f: callable, M: int=10, regularize: bool=False, cutoff=1e-9):
   """finds the poles of f within the given contour
   largely based on https://arxiv.org/abs/2307.04654 ([1]), which is based on
   algorithm [Cp] from  https://doi.org/10.1137/130931035 ([2])
@@ -23,7 +23,7 @@ def locate_poles(contour: Contour, f: callable, M: int=10, cutoff=1e-9):
     return f((omega*(1/scale))+-1*shift)
 
   normalized_contour = (contour+shift)*scale
-  s_k = hankel_entries(normalized_contour, normalized_f, M)
+  s_k = hankel_entries(normalized_contour, normalized_f, M, regularize=regularize)
 
   H  = hankel_matrix(s_k[ :M  ], s_k[M-1:-1])
   H2 = hankel_matrix(s_k[1:M+1], s_k[M:])
@@ -44,7 +44,7 @@ def locate_poles(contour: Contour, f: callable, M: int=10, cutoff=1e-9):
   return (poles[sorting]/scale)-shift, residues[sorting]/scale
 
 
-def hankel_entries(contour: Contour, f: callable, M: int):
+def hankel_entries(contour: Contour, f: callable, M: int, regularize:bool):
   """elements of the hankel matrices according to eq. (2) of [1]
   Args:
       contour (Contour):
@@ -60,7 +60,7 @@ def hankel_entries(contour: Contour, f: callable, M: int):
     return _inner
 
   return 1/(2j * np.pi) * np.array([
-    contour.integrate(integrand(k)) for k in range(2*M)
+    contour.integrate(integrand(k), regularize=regularize) for k in range(2*M)
   ])
 
 def hankel_matrix(c: chex.ArrayDevice, r: chex.ArrayDevice):
